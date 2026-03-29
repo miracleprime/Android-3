@@ -1,5 +1,12 @@
 package com.example.emptyactivity
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.emptyactivity.domain.model.GithubRepo
+import com.example.emptyactivity.viewmodel.RepoUiState
+import com.example.emptyactivity.viewmodel.ReposViewModel
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -54,8 +61,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.emptyactivity.model.GithubRepo
-import com.example.emptyactivity.viewmodel.ReposViewModel
+
 
 private val AppBarBlue = Color(0xFF3F51B5)
 private val AccentBlue = Color(0xFF5C6BC0)
@@ -142,8 +148,8 @@ fun App(reposViewModel: ReposViewModel = viewModel()) {
             }
 
             composable(Screen.Repos.route) {
-                ReposListScreen(
-                    repos = reposViewModel.repos,
+                ReposScreen(
+                    viewModel = reposViewModel,
                     onRepoClick = { repoId ->
                         navController.navigate(Screen.RepoDetails.createRoute(repoId))
                     }
@@ -209,14 +215,107 @@ fun HomeScreen() {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Список репозиториев и экран деталей"
+                        text = "Список репозиториев"
                     )
                 }
             }
         }
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReposScreen(
+    viewModel: ReposViewModel,
+    onRepoClick: (Int) -> Unit
+) {
+    val username by viewModel.username.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    LaunchedEffect(Unit) {
+        viewModel.loadRepos()
+    }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Репозитории") },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = AppBarBlue,
+                    titleContentColor = Color.White
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp)
+        ) {
+            OutlinedTextField(
+                value = username,
+                onValueChange = viewModel::onUsernameChange,
+                label = { Text("GitHub username") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = { viewModel.loadRepos() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Загрузить")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            when (val state = uiState) {
+                RepoUiState.Idle -> {
+                    Text("Пока данных нет")
+                }
+
+                RepoUiState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                is RepoUiState.Error -> {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = state.message,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Button(onClick = { viewModel.loadRepos() }) {
+                            Text("Повторить")
+                        }
+                    }
+                }
+
+                is RepoUiState.Success -> {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(state.repos) { repo ->
+                            RepoListItem(
+                                repo = repo,
+                                onClick = { onRepoClick(repo.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -408,20 +507,6 @@ fun InfoRow(label: String, value: String) {
     }
 }
 
-@Composable
-fun RepoStatsSection(repo: GithubRepo) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip(text = "★ ${repo.stars}", color = Color(0xFFB0BEC5))
-            StatChip(text = "forks ${repo.forks}", color = Color(0xFF81D4FA))
-            StatChip(text = "watchers ${repo.watchers}", color = Color(0xFFB3E5FC))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip(text = "issues ${repo.openIssues}", color = Color(0xFFFFF59D))
-            StatChip(text = repo.visibility, color = Color(0xFFCE93D8))
-        }
-    }
-}
 
 @Composable
 fun StatChip(text: String, color: Color) {
