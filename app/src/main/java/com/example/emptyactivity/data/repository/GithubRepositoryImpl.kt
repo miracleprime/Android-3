@@ -13,7 +13,7 @@ class GithubRepositoryImpl(
 
     override suspend fun getUserRepos(username: String): Result<List<GithubRepo>> {
         if (username.isBlank()) {
-            return Result.failure(IllegalArgumentException("Введите username GitHub"))
+            return Result.failure(IllegalArgumentException("Введите GitHub username"))
         }
 
         return withContext(Dispatchers.IO) {

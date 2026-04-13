@@ -7,18 +7,18 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object ApiFactory {
 
-    private val logging = HttpLoggingInterceptor().apply {
+    private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
-    private val client = OkHttpClient.Builder()
-        .addInterceptor(logging)
+    private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor)
         .build()
 
     val api: GitHubApi by lazy {
         Retrofit.Builder()
             .baseUrl("https://api.github.com/")
-            .client(client)
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(GitHubApi::class.java)

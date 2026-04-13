@@ -1,7 +1,7 @@
 package com.example.emptyactivity.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
 import com.example.emptyactivity.domain.model.GithubRepo
+import com.google.gson.annotations.SerializedName
 
 data class GithubRepoDto(
     val id: Int,

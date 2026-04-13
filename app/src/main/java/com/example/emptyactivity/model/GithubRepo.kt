@@ -1,4 +1,4 @@
-package com.example.emptyactivity.model
+package com.example.emptyactivity.domain.model
 
 data class GithubRepo(
     val id: Int,
@@ -7,10 +7,8 @@ data class GithubRepo(
     val language: String,
     val stars: Int,
     val forks: Int,
-    val watchers: Int,
     val openIssues: Int,
     val url: String,
     val description: String,
-    val defaultBranch: String,
-    val visibility: String
+    val defaultBranch: String
 )
