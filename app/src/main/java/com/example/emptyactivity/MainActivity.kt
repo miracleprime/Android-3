@@ -10,43 +10,50 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -54,11 +61,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.emptyactivity.model.GithubRepo
+import com.example.emptyactivity.domain.model.GithubRepo
+import com.example.emptyactivity.domain.model.RepoFilters
+import com.example.emptyactivity.ui.theme.EmptyActivityTheme
+import com.example.emptyactivity.viewmodel.FavoritesViewModel
+import com.example.emptyactivity.viewmodel.RepoUiState
 import com.example.emptyactivity.viewmodel.ReposViewModel
+import com.example.emptyactivity.viewmodel.SettingsViewModel
 
 private val AppBarBlue = Color(0xFF3F51B5)
-private val AccentBlue = Color(0xFF5C6BC0)
 private val AvatarBlue = Color(0xFF9FA8DA)
 private val LinkBlue = Color(0xFF1E88E5)
 
@@ -66,7 +77,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            EmptyActivityTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -79,33 +90,55 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String, val title: String) {
-    data object Home : Screen("home", "Главная")
     data object Repos : Screen("repos", "Список")
+    data object Favorites : Screen("favorites", "Избранное")
+    data object Settings : Screen("settings", "Фильтры")
     data object RepoDetails : Screen("repo_details/{repoId}", "Карточка") {
         fun createRoute(repoId: Int): String = "repo_details/$repoId"
     }
 }
 
 @Composable
-fun App(reposViewModel: ReposViewModel = viewModel()) {
-    val navController = rememberNavController()
+fun App() {
+    val application = applicationContext() as RepoApplication
+    val container = application.appContainer
 
-    val bottomScreens = listOf(
-        Screen.Home,
-        Screen.Repos
+    val reposViewModel: ReposViewModel = viewModel(
+        factory = ReposViewModel.factory(
+            getUserReposUseCase = container.getUserReposUseCase,
+            repoFiltersStorage = container.repoFiltersStorage,
+            filtersBadgeCache = container.filtersBadgeCache
+        )
     )
 
+    val settingsViewModel: SettingsViewModel = viewModel(
+        factory = SettingsViewModel.factory(
+            repoFiltersStorage = container.repoFiltersStorage,
+            filtersBadgeCache = container.filtersBadgeCache
+        )
+    )
+
+    val favoritesViewModel: FavoritesViewModel = viewModel(
+        factory = FavoritesViewModel.factory(
+            favoritesRepository = container.favoritesRepository
+        )
+    )
+
+    val navController = rememberNavController()
+
+    val bottomScreens = listOf(Screen.Repos, Screen.Favorites)
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val showBottomBar = bottomScreens.any { it.route == currentDestination?.route }
+    val showBottomBar = bottomScreens.any { screen ->
+        currentDestination?.hierarchy?.any { it.route == screen.route } == true
+    }
 
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
                     bottomScreens.forEach { screen ->
-                        val selected =
-                            currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
 
                         NavigationBarItem(
                             selected = selected,
@@ -120,9 +153,9 @@ fun App(reposViewModel: ReposViewModel = viewModel()) {
                             },
                             icon = {
                                 when (screen) {
-                                    Screen.Home -> Icon(Icons.Default.Home, contentDescription = "Главная")
                                     Screen.Repos -> Icon(Icons.Default.List, contentDescription = "Список")
-                                    Screen.RepoDetails -> {}
+                                    Screen.Favorites -> Icon(Icons.Default.Star, contentDescription = "Избранное")
+                                    else -> Unit
                                 }
                             },
                             label = { Text(screen.title) }
@@ -134,18 +167,37 @@ fun App(reposViewModel: ReposViewModel = viewModel()) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Home.route,
+            startDestination = Screen.Repos.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Home.route) {
-                HomeScreen()
-            }
-
             composable(Screen.Repos.route) {
-                ReposListScreen(
-                    repos = reposViewModel.repos,
+                ReposScreen(
+                    viewModel = reposViewModel,
                     onRepoClick = { repoId ->
                         navController.navigate(Screen.RepoDetails.createRoute(repoId))
+                    },
+                    onOpenSettings = {
+                        navController.navigate(Screen.Settings.route)
+                    }
+                )
+            }
+
+            composable(Screen.Favorites.route) {
+                FavoritesScreen(
+                    favoritesViewModel = favoritesViewModel,
+                    onRepoClick = { repoId ->
+                        navController.navigate(Screen.RepoDetails.createRoute(repoId))
+                    }
+                )
+            }
+
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    viewModel = settingsViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onApplyClick = {
+                        settingsViewModel.saveFilters()
+                        navController.popBackStack()
                     }
                 )
             }
@@ -156,10 +208,12 @@ fun App(reposViewModel: ReposViewModel = viewModel()) {
                     ?.toIntOrNull()
 
                 val repo = repoId?.let { reposViewModel.getRepoById(it) }
+                    ?: favoritesViewModel.favorites.value.find { it.id == repoId }
 
                 if (repo != null) {
                     RepoDetailsScreen(
                         repo = repo,
+                        favoritesViewModel = favoritesViewModel,
                         onBackClick = { navController.popBackStack() }
                     )
                 } else {
@@ -170,64 +224,180 @@ fun App(reposViewModel: ReposViewModel = viewModel()) {
                         Text("Репозиторий не найден")
                     }
                 }
-
             }
         }
     }
 }
 
+@Composable
+private fun applicationContext(): android.app.Application {
+    return androidx.compose.ui.platform.LocalContext.current.applicationContext as android.app.Application
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun ReposScreen(
+    viewModel: ReposViewModel,
+    onRepoClick: (Int) -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val filters by viewModel.filters.collectAsStateWithLifecycle()
+    val shouldShowBadge by viewModel.shouldShowBadge.collectAsStateWithLifecycle()
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Главная") },
+                title = { Text("Репозитории GitHub") },
+                actions = {
+                    BadgedBox(
+                        badge = {
+                            if (shouldShowBadge) {
+                                Badge()
+                            }
+                        }
+                    ) {
+                        TextButton(onClick = onOpenSettings) {
+                            Text("Фильтры", color = Color.White)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = AppBarBlue,
-                    titleContentColor = Color.White
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
                 )
             )
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .padding(16.dp)
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EAF6))
+            FiltersSummaryCard(filters = filters)
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = { viewModel.refresh() },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "GitHub Repo Viewer",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Список репозиториев и экран деталей"
-                    )
+                Text("Обновить список")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            when (val state = uiState) {
+                RepoUiState.Idle -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Данные пока не загружены")
+                    }
+                }
+
+                RepoUiState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                is RepoUiState.Error -> {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = state.message,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Button(onClick = { viewModel.refresh() }) {
+                            Text("Повторить")
+                        }
+                    }
+                }
+
+                is RepoUiState.Success -> {
+                    if (state.repos.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("По этим фильтрам ничего не найдено")
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(state.repos) { repo ->
+                                RepoListItem(
+                                    repo = repo,
+                                    onClick = { onRepoClick(repo.id) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+@Composable
+fun FiltersSummaryCard(filters: RepoFilters) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EAF6))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Текущие настройки",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Username: ${filters.username}")
+            Text(
+                "Название содержит: ${if (filters.repoNameQuery.isBlank()) "любое" else filters.repoNameQuery}"
+            )
+            Text("Минимум звёзд: ${filters.minStars}")
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReposListScreen(
-    repos: List<GithubRepo>,
-    onRepoClick: (Int) -> Unit
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onBackClick: () -> Unit,
+    onApplyClick: () -> Unit
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val shouldShowBadge by viewModel.shouldShowBadge.collectAsStateWithLifecycle()
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Репозитории") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = Color.White
+                        )
+                    }
+                },
+                title = { Text("Фильтры") },
+                actions = {
+                    if (shouldShowBadge) {
+                        Badge()
+                    }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = AppBarBlue,
                     titleContentColor = Color.White
@@ -235,18 +405,104 @@ fun ReposListScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(repos) { repo ->
-                RepoListItem(
-                    repo = repo,
-                    onClick = { onRepoClick(repo.id) }
+            Text(
+                text = "Здесь мы меняем настройки списка. После нажатия «Готово» список перезагрузится.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            OutlinedTextField(
+                value = uiState.username,
+                onValueChange = viewModel::onUsernameChange,
+                label = { Text("GitHub username") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = uiState.repoNameQuery,
+                onValueChange = viewModel::onRepoNameQueryChange,
+                label = { Text("Название содержит") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = uiState.minStarsText,
+                onValueChange = viewModel::onMinStarsChange,
+                label = { Text("Минимум звёзд") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = onApplyClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Готово")
+            }
+
+            TextButton(
+                onClick = { viewModel.resetToDefault() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Сбросить к значениям по умолчанию")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FavoritesScreen(
+    favoritesViewModel: FavoritesViewModel,
+    onRepoClick: (Int) -> Unit
+) {
+    val favorites by favoritesViewModel.favorites.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Избранное") },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = AppBarBlue,
+                    titleContentColor = Color.White
                 )
+            )
+        }
+    ) { innerPadding ->
+        if (favorites.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Пока нет избранных репозиториев")
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(favorites) { repo ->
+                    RepoListItem(
+                        repo = repo,
+                        onClick = { onRepoClick(repo.id) }
+                    )
+                }
             }
         }
     }
@@ -296,7 +552,7 @@ fun RepoListItem(
                     color = Color.Gray
                 )
                 Text(
-                    text = "Язык: ${repo.language}",
+                    text = "Язык: ${repo.language} • ★ ${repo.stars}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
@@ -305,20 +561,25 @@ fun RepoListItem(
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RepoDetailsScreen(
     repo: GithubRepo,
+    favoritesViewModel: FavoritesViewModel,
     onBackClick: () -> Unit
 ) {
+    val isFavoriteFlow = remember(repo.id) {
+        favoritesViewModel.observeIsFavorite(repo.id)
+    }
+    val isFavorite by isFavoriteFlow.collectAsStateWithLifecycle(initialValue = false)
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Назад",
                             tint = Color.White
                         )
@@ -336,7 +597,8 @@ fun RepoDetailsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
                 Text(
@@ -344,49 +606,45 @@ fun RepoDetailsScreen(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            item {
+                Button(
+                    onClick = {
+                        if (isFavorite) {
+                            favoritesViewModel.removeFromFavorites(repo.id)
+                        } else {
+                            favoritesViewModel.addToFavorites(repo)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (isFavorite) "Убрать из избранного" else "Добавить в избранное")
+                }
+            }
 
-                InfoRow(label = "Владелец", value = repo.owner)
-                InfoRow(label = "Язык", value = repo.language)
+            item { InfoRow(label = "Владелец", value = repo.owner) }
+            item { InfoRow(label = "Язык", value = repo.language) }
+            item { InfoRow(label = "Звёзды", value = repo.stars.toString()) }
+            item { InfoRow(label = "Форки", value = repo.forks.toString()) }
+            item { InfoRow(label = "Открытые задачи", value = repo.openIssues.toString()) }
+            item { InfoRow(label = "Ветка по умолчанию", value = repo.defaultBranch) }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
+            item {
                 Text(
                     text = "Описание",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Text(text = repo.description)
+            }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = repo.description,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Основные показатели",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                SimpleRepoStats(repo = repo)
-
-                Spacer(modifier = Modifier.height(16.dp))
-
+            item {
                 Text(
                     text = "Ссылка",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
                 Text(
                     text = repo.url,
                     color = LinkBlue
@@ -395,7 +653,6 @@ fun RepoDetailsScreen(
         }
     }
 }
-
 
 @Composable
 fun InfoRow(label: String, value: String) {
@@ -407,48 +664,3 @@ fun InfoRow(label: String, value: String) {
         Text(text = value)
     }
 }
-
-@Composable
-fun RepoStatsSection(repo: GithubRepo) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip(text = "★ ${repo.stars}", color = Color(0xFFB0BEC5))
-            StatChip(text = "forks ${repo.forks}", color = Color(0xFF81D4FA))
-            StatChip(text = "watchers ${repo.watchers}", color = Color(0xFFB3E5FC))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip(text = "issues ${repo.openIssues}", color = Color(0xFFFFF59D))
-            StatChip(text = repo.visibility, color = Color(0xFFCE93D8))
-        }
-    }
-}
-
-@Composable
-fun StatChip(text: String, color: Color) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(color)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        Text(
-            text = text,
-            color = Color.Black,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-fun SimpleRepoStats(repo: GithubRepo) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip(text = "Звёзды: ${repo.stars}", color = Color(0xFFB0BEC5))
-            StatChip(text = "Форки: ${repo.forks}", color = Color(0xFF81D4FA))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatChip(text = "Задачи: ${repo.openIssues}", color = Color(0xFFFFF59D))
-        }
-    }
-}
-
