@@ -9,6 +9,8 @@ data class ProfileUiState(
     val editAvatarUri: String = "",
     val editResumeUrl: String = "",
     val editPosition: String = "",
+    val editFavoriteClassTime: String = "",
+    val favoriteTimeError: String? = null,
     val isDownloadingResume: Boolean = false
 )
 

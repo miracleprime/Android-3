@@ -1,6 +1,7 @@
 package com.example.emptyactivity
 
 import android.Manifest
+import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -59,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,7 +91,8 @@ import com.example.emptyactivity.viewmodel.RepoUiState
 import com.example.emptyactivity.viewmodel.ReposViewModel
 import com.example.emptyactivity.viewmodel.SettingsViewModel
 import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.runtime.saveable.rememberSaveable
+import java.util.Calendar
+import android.app.AlarmManager
 private val AppBarBlue = Color(0xFF3F51B5)
 private val AvatarBlue = Color(0xFF9FA8DA)
 private val LinkBlue = Color(0xFF1E88E5)
@@ -152,7 +155,8 @@ fun App() {
             observeUserProfileUseCase = container.observeUserProfileUseCase,
             saveUserProfileUseCase = container.saveUserProfileUseCase,
             downloadResumeFileUseCase = container.downloadResumeFileUseCase,
-            userProfileRepository = container.userProfileRepository
+            userProfileRepository = container.userProfileRepository,
+            favoritePairAlarmScheduler = container.favoritePairAlarmScheduler
         )
     )
 
@@ -205,21 +209,15 @@ fun App() {
             composable(Screen.Repos.route) {
                 ReposScreen(
                     viewModel = reposViewModel,
-                    onRepoClick = { repoId ->
-                        navController.navigate(Screen.RepoDetails.createRoute(repoId))
-                    },
-                    onOpenSettings = {
-                        navController.navigate(Screen.Settings.route)
-                    }
+                    onRepoClick = { repoId -> navController.navigate(Screen.RepoDetails.createRoute(repoId)) },
+                    onOpenSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
 
             composable(Screen.Favorites.route) {
                 FavoritesScreen(
                     favoritesViewModel = favoritesViewModel,
-                    onRepoClick = { repoId ->
-                        navController.navigate(Screen.RepoDetails.createRoute(repoId))
-                    }
+                    onRepoClick = { repoId -> navController.navigate(Screen.RepoDetails.createRoute(repoId)) }
                 )
             }
 
@@ -256,10 +254,7 @@ fun App() {
             }
 
             composable(Screen.RepoDetails.route) { backStackEntry ->
-                val repoId = backStackEntry.arguments
-                    ?.getString("repoId")
-                    ?.toIntOrNull()
-
+                val repoId = backStackEntry.arguments?.getString("repoId")?.toIntOrNull()
                 val repo = repoId?.let { reposViewModel.getRepoById(it) }
                     ?: favoritesViewModel.favorites.value.find { it.id == repoId }
 
@@ -270,10 +265,7 @@ fun App() {
                         onBackClick = { navController.popBackStack() }
                     )
                 } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Репозиторий не найден")
                     }
                 }
@@ -303,11 +295,7 @@ fun ReposScreen(
             CenterAlignedTopAppBar(
                 title = { Text("Репозитории GitHub") },
                 actions = {
-                    BadgedBox(
-                        badge = {
-                            if (shouldShowBadge) Badge()
-                        }
-                    ) {
+                    BadgedBox(badge = { if (shouldShowBadge) Badge() }) {
                         TextButton(onClick = onOpenSettings) {
                             Text("Фильтры", color = Color.White)
                         }
@@ -328,29 +316,15 @@ fun ReposScreen(
                 .padding(16.dp)
         ) {
             FiltersSummaryCard(filters = filters)
-
             Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = { viewModel.refresh() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Button(onClick = { viewModel.refresh() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Обновить список")
             }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             when (val state = uiState) {
-                RepoUiState.Idle -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Данные пока не загружены")
-                    }
-                }
-                RepoUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
+                RepoUiState.Idle -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Данные пока не загружены") }
+                RepoUiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 is RepoUiState.Error -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(text = state.message, color = MaterialTheme.colorScheme.error)
@@ -359,14 +333,10 @@ fun ReposScreen(
                 }
                 is RepoUiState.Success -> {
                     if (state.repos.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("По этим фильтрам ничего не найдено")
-                        }
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("По этим фильтрам ничего не найдено") }
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(state.repos) { repo ->
-                                RepoListItem(repo = repo, onClick = { onRepoClick(repo.id) })
-                            }
+                            items(state.repos) { repo -> RepoListItem(repo = repo, onClick = { onRepoClick(repo.id) }) }
                         }
                     }
                 }
@@ -382,11 +352,7 @@ fun FiltersSummaryCard(filters: RepoFilters) {
         colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EAF6))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Текущие настройки",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = "Текущие настройки", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
             Text("Username: ${filters.username}")
             Text("Название содержит: ${if (filters.repoNameQuery.isBlank()) "любое" else filters.repoNameQuery}")
@@ -410,33 +376,20 @@ fun SettingsScreen(
             CenterAlignedTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
-                            tint = Color.White
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
                     }
                 },
                 title = { Text("Фильтры") },
                 actions = { if (shouldShowBadge) Badge() },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = AppBarBlue,
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = AppBarBlue, titleContentColor = Color.White)
             )
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Здесь мы меняем настройки списка. После нажатия «Готово» список перезагрузится.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(text = "Здесь мы меняем настройки списка. После нажатия «Готово» список перезагрузится.")
 
             OutlinedTextField(
                 value = uiState.username,
@@ -445,7 +398,6 @@ fun SettingsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-
             OutlinedTextField(
                 value = uiState.repoNameQuery,
                 onValueChange = viewModel::onRepoNameQueryChange,
@@ -453,22 +405,17 @@ fun SettingsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-
             OutlinedTextField(
                 value = uiState.minStarsText,
                 onValueChange = viewModel::onMinStarsChange,
                 label = { Text("Минимум звёзд") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
             Button(onClick = onApplyClick, modifier = Modifier.fillMaxWidth()) { Text("Готово") }
-            TextButton(onClick = { viewModel.resetToDefault() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Сбросить к значениям по умолчанию")
-            }
+            TextButton(onClick = { viewModel.resetToDefault() }, modifier = Modifier.fillMaxWidth()) { Text("Сбросить к значениям по умолчанию") }
         }
     }
 }
@@ -485,28 +432,18 @@ fun FavoritesScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Избранное") },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = AppBarBlue,
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = AppBarBlue, titleContentColor = Color.White)
             )
         }
     ) { innerPadding ->
         if (favorites.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Пока нет избранных репозиториев")
-            }
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) { Text("Пока нет избранных репозиториев") }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(favorites) { repo ->
-                    RepoListItem(repo = repo, onClick = { onRepoClick(repo.id) })
-                }
+                items(favorites) { repo -> RepoListItem(repo = repo, onClick = { onRepoClick(repo.id) }) }
             }
         }
     }
@@ -524,12 +461,8 @@ fun ProfileScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collectLatest { event ->
             when (event) {
-                is ProfileEvent.ShowMessage -> {
-                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
-                }
-                is ProfileEvent.OpenDownloadedFile -> {
-                    openDownloadedFile(context, event.file)
-                }
+                is ProfileEvent.ShowMessage -> Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+                is ProfileEvent.OpenDownloadedFile -> openDownloadedFile(context, event.file)
             }
         }
     }
@@ -543,18 +476,12 @@ fun ProfileScreen(
                         Text("Редактировать", color = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = AppBarBlue,
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = AppBarBlue, titleContentColor = Color.White)
             )
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -568,20 +495,18 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
+                if (uiState.profile.position.isNotBlank()) Text(uiState.profile.position, color = Color.Gray)
 
-                if (uiState.profile.position.isNotBlank()) {
-                    Text(uiState.profile.position, color = Color.Gray)
-                }
-
+                ProfileInfoCard(
+                    title = "Любимая пара",
+                    value = if (uiState.profile.favoriteClassTime.isBlank()) "Не указано" else uiState.profile.favoriteClassTime
+                )
                 ProfileInfoCard(
                     title = "Ссылка на резюме",
                     value = if (uiState.profile.resumeUrl.isBlank()) "Не указана" else uiState.profile.resumeUrl
                 )
 
-                Button(
-                    onClick = { viewModel.openResume() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Button(onClick = { viewModel.openResume() }, modifier = Modifier.fillMaxWidth()) {
                     Text(if (uiState.isDownloadingResume) "Скачивание..." else "Резюме")
                 }
             }
@@ -604,36 +529,41 @@ fun EditProfileScreen(
 
     val galleryPermission = galleryPermissionForCurrentAndroid()
 
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { viewModel.onGalleryImageChosen(it.toString()) }
     }
 
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture()
-    ) { success ->
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         viewModel.onCameraCaptureResult(success)
     }
 
-    val storagePermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    val storagePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted) {
             Toast.makeText(context, "Без доступа к хранилищу редактирование недоступно", Toast.LENGTH_SHORT).show()
             onBackClick()
         }
     }
 
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             val uriString = viewModel.createCameraOutputUri()
             uriString?.let { cameraLauncher.launch(Uri.parse(it)) }
         } else {
             Toast.makeText(context, "Без доступа к камере нельзя сделать фото", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(
+                context,
+                "Профиль сохранён, но без разрешения уведомления не покажутся",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        onDoneClick()
     }
 
     LaunchedEffect(Unit) {
@@ -654,40 +584,79 @@ fun EditProfileScreen(
         }
     }
 
+    val openTimePicker: () -> Unit = {
+        val calendar = Calendar.getInstance()
+        val currentText = uiState.editFavoriteClassTime
+        val hour: Int
+        val minute: Int
+
+        if (currentText.matches(Regex("\\d{2}:\\d{2}"))) {
+            hour = currentText.substringBefore(":").toIntOrNull() ?: calendar.get(Calendar.HOUR_OF_DAY)
+            minute = currentText.substringAfter(":").toIntOrNull() ?: calendar.get(Calendar.MINUTE)
+        } else {
+            hour = calendar.get(Calendar.HOUR_OF_DAY)
+            minute = calendar.get(Calendar.MINUTE)
+        }
+
+        TimePickerDialog(
+            context,
+            { _, selectedHour, selectedMinute ->
+                viewModel.onFavoriteClassTimePicked(selectedHour, selectedMinute)
+            },
+            hour,
+            minute,
+            true
+        ).show()
+    }
+
+    val saveProfileAndClose: () -> Unit = {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            Toast.makeText(
+                context,
+                "Разреши Alarms & reminders",
+                Toast.LENGTH_LONG
+            ).show()
+
+            context.startActivity(
+                Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        } else if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            onDoneClick()
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
-                            tint = Color.White
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White)
                     }
                 },
                 title = { Text("Редактирование профиля") },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = AppBarBlue,
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = AppBarBlue, titleContentColor = Color.White)
             )
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
-            AvatarView(
-                avatarUri = uiState.editAvatarUri,
-                size = 120,
-                onClick = { showAvatarSourceDialog = true }
-            )
+            AvatarView(avatarUri = uiState.editAvatarUri, size = 120, onClick = { showAvatarSourceDialog = true })
             Text("Нажми на фото, чтобы выбрать из галереи или камеры")
 
             OutlinedTextField(
@@ -712,8 +681,29 @@ fun EditProfileScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
             )
 
+            OutlinedTextField(
+                value = uiState.editFavoriteClassTime,
+                onValueChange = viewModel::onFavoriteClassTimeChange,
+                label = { Text("Время любимой пары") },
+                placeholder = { Text("HH:mm") },
+                singleLine = true,
+                isError = uiState.favoriteTimeError != null,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    TextButton(onClick = openTimePicker) {
+                        Text("🕒")
+                    }
+                }
+            )
+
+            uiState.favoriteTimeError?.let { errorText ->
+                Text(text = errorText, color = MaterialTheme.colorScheme.error, modifier = Modifier.align(Alignment.Start))
+            }
+
             Button(
-                onClick = onDoneClick,
+                onClick = saveProfileAndClose,
+                enabled = viewModel.canSaveProfile(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Готово")
@@ -731,9 +721,7 @@ fun EditProfileScreen(
                     TextButton(onClick = {
                         showAvatarSourceDialog = false
                         galleryLauncher.launch("image/*")
-                    }) {
-                        Text("Галерея")
-                    }
+                    }) { Text("Галерея") }
                     TextButton(onClick = {
                         showAvatarSourceDialog = false
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -742,15 +730,11 @@ fun EditProfileScreen(
                         } else {
                             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }
-                    }) {
-                        Text("Камера")
-                    }
+                    }) { Text("Камера") }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAvatarSourceDialog = false }) {
-                    Text("Отмена")
-                }
+                TextButton(onClick = { showAvatarSourceDialog = false }) { Text("Отмена") }
             }
         )
     }
@@ -762,25 +746,15 @@ fun AvatarView(
     size: Int,
     onClick: (() -> Unit)? = null
 ) {
-
     val avatarModifier = Modifier
         .size(size.dp)
         .clip(CircleShape)
         .background(AvatarBlue)
-        .then(
-            if (onClick != null) Modifier.clickable { onClick() } else Modifier
-        )
+        .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
 
     if (avatarUri.isBlank()) {
-        Box(
-            modifier = avatarModifier,
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Фото",
-                color = Color.Black,
-                fontWeight = FontWeight.Bold
-            )
+        Box(modifier = avatarModifier, contentAlignment = Alignment.Center) {
+            Text(text = "Фото", color = Color.Black, fontWeight = FontWeight.Bold)
         }
     } else {
         AsyncImage(
@@ -806,27 +780,16 @@ fun ProfileInfoCard(title: String, value: String) {
 }
 
 @Composable
-fun RepoListItem(
-    repo: GithubRepo,
-    onClick: () -> Unit
-) {
+fun RepoListItem(repo: GithubRepo, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(48.dp).clip(CircleShape).background(AvatarBlue),
-                contentAlignment = Alignment.Center
-            ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(AvatarBlue), contentAlignment = Alignment.Center) {
                 Text(text = repo.name.take(2).uppercase(), fontWeight = FontWeight.Bold, color = Color.Black)
             }
-
             Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = repo.name, style = MaterialTheme.typography.titleMedium)
                 Text(text = "Владелец: ${repo.owner}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
@@ -838,49 +801,25 @@ fun RepoListItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RepoDetailsScreen(
-    repo: GithubRepo,
-    favoritesViewModel: FavoritesViewModel,
-    onBackClick: () -> Unit
-) {
+fun RepoDetailsScreen(repo: GithubRepo, favoritesViewModel: FavoritesViewModel, onBackClick: () -> Unit) {
     val isFavoriteFlow = remember(repo.id) { favoritesViewModel.observeIsFavorite(repo.id) }
     val isFavorite by isFavoriteFlow.collectAsStateWithLifecycle(initialValue = false)
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
-                            tint = Color.White
-                        )
-                    }
-                },
+                navigationIcon = { IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад", tint = Color.White) } },
                 title = { Text("Карточка") },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = AppBarBlue,
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = AppBarBlue, titleContentColor = Color.White)
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { Text(text = repo.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
             item {
-                Text(text = repo.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            }
-            item {
-                Button(
-                    onClick = {
-                        if (isFavorite) favoritesViewModel.removeFromFavorites(repo.id)
-                        else favoritesViewModel.addToFavorites(repo)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Button(onClick = {
+                    if (isFavorite) favoritesViewModel.removeFromFavorites(repo.id) else favoritesViewModel.addToFavorites(repo)
+                }, modifier = Modifier.fillMaxWidth()) {
                     Text(if (isFavorite) "Убрать из избранного" else "Добавить в избранное")
                 }
             }
@@ -890,14 +829,8 @@ fun RepoDetailsScreen(
             item { InfoRow(label = "Форки", value = repo.forks.toString()) }
             item { InfoRow(label = "Открытые задачи", value = repo.openIssues.toString()) }
             item { InfoRow(label = "Ветка по умолчанию", value = repo.defaultBranch) }
-            item {
-                Text(text = "Описание", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(text = repo.description)
-            }
-            item {
-                Text(text = "Ссылка", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(text = repo.url, color = LinkBlue)
-            }
+            item { Text(text = "Описание", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text(text = repo.description) }
+            item { Text(text = "Ссылка", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text(text = repo.url, color = LinkBlue) }
         }
     }
 }

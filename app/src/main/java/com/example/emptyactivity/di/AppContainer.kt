@@ -3,6 +3,7 @@ package com.example.emptyactivity.di
 import android.content.Context
 import androidx.room.Room
 import com.example.emptyactivity.data.local.AppDatabase
+import com.example.emptyactivity.data.notifications.FavoritePairAlarmScheduler
 import com.example.emptyactivity.data.preferences.RepoFiltersStorage
 import com.example.emptyactivity.data.remote.ApiFactory
 import com.example.emptyactivity.data.repository.FavoritesRepositoryImpl
@@ -47,15 +48,9 @@ class AppContainer(context: Context) {
         UserProfileRepositoryImpl(applicationContext)
     }
 
-    val observeUserProfileUseCase: ObserveUserProfileUseCase by lazy {
-        ObserveUserProfileUseCase(userProfileRepository)
-    }
+    val observeUserProfileUseCase by lazy { ObserveUserProfileUseCase(userProfileRepository) }
+    val saveUserProfileUseCase by lazy { SaveUserProfileUseCase(userProfileRepository) }
+    val downloadResumeFileUseCase by lazy { DownloadResumeFileUseCase(userProfileRepository) }
 
-    val saveUserProfileUseCase: SaveUserProfileUseCase by lazy {
-        SaveUserProfileUseCase(userProfileRepository)
-    }
-
-    val downloadResumeFileUseCase: DownloadResumeFileUseCase by lazy {
-        DownloadResumeFileUseCase(userProfileRepository)
-    }
+    val favoritePairAlarmScheduler by lazy { FavoritePairAlarmScheduler(applicationContext) }
 }
