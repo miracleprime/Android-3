@@ -1,0 +1,31 @@
+<resources>
+    <string name="profile_title">Профиль</string>
+    <string name="edit_button">Редактировать</string>
+    <string name="profile_empty">Профиль пока пустой</string>
+    <string name="full_name_not_filled">ФИО не заполнено</string>
+    <string name="favorite_pair_title">Любимая пара</string>
+    <string name="favorite_pair_not_set">Не указано</string>
+    <string name="resume_link_title">Ссылка на резюме</string>
+    <string name="resume_not_set">Не указана</string>
+    <string name="resume_button">Резюме</string>
+    <string name="resume_loading">Скачивание...</string>
+
+    <string name="edit_profile_title">Редактирование профиля</string>
+    <string name="choose_avatar_hint">Нажми на фото, чтобы выбрать из галереи или камеры</string>
+    <string name="full_name_label">ФИО</string>
+    <string name="position_label">Должность / роль</string>
+    <string name="resume_url_label">Ссылка на резюме / портфолио</string>
+    <string name="favorite_pair_time_label">Время любимой пары</string>
+    <string name="choose_avatar_title">Откуда взять аватарку?</string>
+    <string name="choose_avatar_text">Можно выбрать фото из галереи или сделать новый снимок камерой</string>
+    <string name="gallery">Галерея</string>
+    <string name="camera">Камера</string>
+    <string name="cancel">Отмена</string>
+    <string name="back">Назад</string>
+    <string name="time_placeholder">HH:mm</string>
+    <string name="time_picker_icon">🕒</string>
+    <string name="done">Готово</string>
+
+    <string name="avatar_placeholder">Фото</string>
+    <string name="avatar_content_description">Аватар</string>
+</resources>
