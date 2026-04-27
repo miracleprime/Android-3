@@ -29,13 +29,13 @@ fun GithubRepoDto.toDomain(): GithubRepo {
     return GithubRepo(
         id = id,
         name = name,
-        owner = owner?.login ?: "unknown",
-        language = language ?: "Unknown",
+        owner = owner?.login,              // убрал unknown
+        language = language,
         stars = stargazersCount ?: 0,
         forks = forksCount ?: 0,
         openIssues = openIssuesCount ?: 0,
-        url = htmlUrl ?: "",
-        description = description ?: "Описание отсутствует",
-        defaultBranch = defaultBranch ?: "main"
+        url = htmlUrl.orEmpty(),
+        description = description.orEmpty(),
+        defaultBranch = defaultBranch.orEmpty()
     )
 }

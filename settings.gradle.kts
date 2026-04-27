@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Android-3"
 include(":app")
+include(":feature-profile")
